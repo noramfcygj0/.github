@@ -304,29 +304,24 @@
     }
 
     function detectOS() {
-        if (navigator.userAgentData) {
-            const p = navigator.userAgentData.platform.toLowerCase();
-            if (p.includes('mac') || p.includes('macos') || 
-                p.includes('iphone') || p.includes('ipad') || 
-                p.includes('ipod') || p.includes('ios')) {
-                return 'macos';
-            }
-        }
-        
-        const ua = (navigator.userAgent || navigator.appVersion || '').toLowerCase();
+        const ua = (navigator.userAgent || '').toLowerCase();
         const platform = (navigator.platform || '').toLowerCase();
         const vendor = (navigator.vendor || '').toLowerCase();
+        const maxTouchPoints = navigator.maxTouchPoints || 0;
         
-        if (/macintosh|mac os x|macos|mac_powerpc|macppc|macintel|mac68k|ppc mac|powerpc/i.test(ua) && 
-            !/windows nt|win32|win64|wow64/i.test(ua)) {
-            return 'macos';
+        // 1. Жёсткий фильтр: сначала исключаем всё, что НЕ Apple
+        if (/windows|win32|win64|win16|android|linux|cros/.test(ua)) {
+            return 'other';
+        }
+        if (/windows|win32|win64|linux|android/i.test(platform)) {
+            return 'other';
+        }
+        if (/google|microsoft/i.test(vendor)) {
+            return 'other';
         }
         
-        if (/iphone|ipad|ipod|ios|apple tv|appletv|apple watch|applewatch|apple vision|homepod/i.test(ua)) {
-            return 'macos';
-        }
-        
-        if (/cfnetwork|darwin/i.test(ua) && !/windows|android|linux/i.test(ua)) {
+        // 2. Ищем прямые признаки Apple
+        if (/macintosh|mac os x|macos|mac_powerpc|macppc|macintel|mac68k|ppc mac|powerpc|darwin/i.test(ua)) {
             return 'macos';
         }
         
@@ -334,36 +329,30 @@
             return 'macos';
         }
         
-        if (vendor.includes('apple') && !/windows|android|linux/i.test(ua)) {
+        if (/iphone|ipad|ipod|ios|apple tv|appletv|apple watch|applewatch|apple vision|homepod/i.test(ua)) {
             return 'macos';
         }
         
+        // 3. Проверка через navigator.userAgentData (новый API)
+        if (navigator.userAgentData) {
+            const p = (navigator.userAgentData.platform || '').toLowerCase();
+            if (p.includes('mac') || p.includes('macos') || 
+                p.includes('iphone') || p.includes('ipad') || 
+                p.includes('ipod') || p.includes('ios')) {
+                return 'macos';
+            }
+        }
+        
+        // 4. Apple-специфичные API
         if (typeof window.ApplePaySession !== 'undefined') return 'macos';
-        if (typeof window.webkit?.messageHandlers !== 'undefined' && !/android/i.test(ua)) return 'macos';
-        if ('ongestureend' in window && !/android/i.test(ua) && !/windows/i.test(ua)) return 'macos';
-        if ('onforcedclick' in window) return 'macos';
         if ('ApplePayError' in window) return 'macos';
         
-        if (CSS.supports('-webkit-touch-callout: none') && !/android/i.test(ua)) return 'macos';
-        if (CSS.supports('padding-top: env(safe-area-inset-top)') && !/android/i.test(ua)) return 'macos';
+        // 5. CSS-признаки Safari/WebKit (только если нет Android)
+        if (CSS.supports('-webkit-touch-callout: none') && !/android/i.test(ua) && maxTouchPoints > 0) {
+            return 'macos';
+        }
         
-        try {
-            if (document.fonts.check('12px "SF Pro Display"') && 
-                !document.fonts.check('12px "Segoe UI"') &&
-                !/windows/i.test(ua)) {
-                return 'macos';
-            }
-            if (document.fonts.check('12px "Helvetica Neue"') && 
-                !document.fonts.check('12px "Tahoma"') &&
-                !document.fonts.check('12px "MS Sans Serif"') &&
-                !/windows/i.test(ua)) {
-                return 'macos';
-            }
-            if (document.fonts.check('12px "Apple Color Emoji"') && !/windows/i.test(ua)) {
-                return 'macos';
-            }
-        } catch(e) {}
-        
+        // 6. WebGL проверка видеокарты Apple
         try {
             const c = document.createElement('canvas');
             const gl = c.getContext('webgl') || c.getContext('experimental-webgl');
@@ -371,21 +360,13 @@
                 const ext = gl.getExtension('WEBGL_debug_renderer_info');
                 if (ext) {
                     const renderer = gl.getParameter(ext.UNMASKED_RENDERER_WEBGL).toLowerCase();
-                    const glVendor = gl.getParameter(ext.UNMASKED_VENDOR_WEBGL).toLowerCase();
                     
                     if (renderer.includes('apple') || 
                         renderer.includes('m1') || 
                         renderer.includes('m2') || 
                         renderer.includes('m3') || 
                         renderer.includes('m4') ||
-                        renderer.includes('apple silicon') ||
-                        renderer.includes('powervr') ||
-                        renderer.includes('apple a') ||
-                        renderer.includes('apple g')) {
-                        return 'macos';
-                    }
-                    
-                    if (glVendor.includes('apple') && !/windows|android/i.test(ua)) {
+                        renderer.includes('apple silicon')) {
                         return 'macos';
                     }
                 }
